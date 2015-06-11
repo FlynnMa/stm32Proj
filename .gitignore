@@ -1,0 +1,4 @@
+.hgignore
+*/.hg/*
+*.o
+*.d

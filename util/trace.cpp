@@ -1,6 +1,4 @@
 #include <stdarg.h>
-//#include <stdio.h>
-//#include <string.h>
 #include "mbed.h"
 #include "trace.h"
 
@@ -58,8 +56,8 @@ void TraceLine(void)
 {
   int i;
 
-  for (i = 0; i < 76; i++)
-    printf("-");
+  for (i = 0; i < 16; i++)
+    printf("#");
   printf("\r\n");
 }
 
@@ -90,6 +88,8 @@ void TracePrint(const char *fmt, ...)
     len = len > 127 ? 127 : len;
     buf[len] = 0;
     printf(buf);
+    fflush(stdout);
+
   }
 }
 

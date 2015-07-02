@@ -45,7 +45,7 @@
 		</scannerConfigBuildInfo>
 	</storageModule>
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-		<project id="smartB.null.1738349835" name="smartB"/>
+		<project id="bleOnSTM32.null.1738349835" name="bleOnSTM32"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 </cproject>

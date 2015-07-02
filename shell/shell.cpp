@@ -14,7 +14,7 @@ void listCommands(unsigned int argc,char * argv [ ],int * result)
     i = 0;
     while(m_shellSingleton->m_defaultCmd[i].name != NULL)
     {
-        Trace("%s\t-\t%s",
+        Trace("%s\t##\t%s",
                 m_shellSingleton->m_defaultCmd[i].name,
                 m_shellSingleton->m_defaultCmd[i].help);
         i++;
@@ -29,7 +29,7 @@ void listCommands(unsigned int argc,char * argv [ ],int * result)
     i = 0;
     while(m_shellSingleton->m_custCmd[i].name != NULL)
     {
-        Trace("%s\t-\t%s",
+        Trace("%s\t##\t%s",
                 m_shellSingleton->m_custCmd[i].name,
                 m_shellSingleton->m_custCmd[i].help);
         i++;
@@ -110,14 +110,12 @@ const Command defaultCommands[] =
 };
 
 
-Shell::Shell():m_custCmd(NULL) {
-
+Shell::Shell():m_custCmd(NULL)
+{
     m_exit = false;
     m_echo = true;
     m_defaultCmd = defaultCommands;
-//    serialDevice.baud(115200);
-    serialDevice.baud(225000); //921600, 225000, 460800
-
+    serialDevice.baud(115200); //921600, 460800£¬ 225000, 115200
     serialDevice.attach(this, &Shell::rxInterrupt,Serial::RxIrq);
 
 }
@@ -202,7 +200,6 @@ static bool getLine(char ch, char *line, unsigned size)
 
       case '\r':
         printStr = "\r\n";
-//        TracePrint("\r\n");
         *p = 0;
         ret = true;
         break;

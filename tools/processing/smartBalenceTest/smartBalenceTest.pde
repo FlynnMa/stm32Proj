@@ -159,7 +159,7 @@ void setupRazor() {
   
   // Set Razor output parameters
 //  serial.write("#ob\r");  // Turn on binary output
-  serial.write("orien on\r\n");  // Turn on continuous streaming output
+  serial.write("orien\r\n");  // Turn on continuous streaming output
 //  serial.write("orienlog\r"); // Turn on orientation log
   delay(300);
   // Synch with Razor

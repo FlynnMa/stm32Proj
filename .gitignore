@@ -1,4 +1,15 @@
 .hgignore
+
 */.hg/*
+
 *.o
+
 *.d
+
+*.bin
+
+*.elf
+
+*.hex
+
+*.map

@@ -2,6 +2,8 @@
 #include "rtos.h"
 #include "util.h"
 #include "shell.h"
+#include "electronicVehicleThread.h"
+#include "trace.h"
 
 DigitalOut myled(LED1);
 
@@ -44,6 +46,7 @@ void test(void const *argument)
 }
 #endif
 
+
 Thread *pShellThread;
 void shellThreadProc(void const *argument)
 {
@@ -53,24 +56,53 @@ void shellThreadProc(void const *argument)
 
     mShell->process(pShellThread);
 }
+
+electronicVehicleThread evThread;
+
+void evUartThreadProc(void const *argument)
+{
+    evThread.uartThread(argument);
+}
+
+void evTimerThreadProc(void const *argument)
+{
+    evThread.timerThread(argument);
+}
+
 unsigned char shellStack[1024];
+
+unsigned char evUartStack[1024];
+
+unsigned char evTimerStack[1024];
 
 extern void sensorsAccEnable(int en);
 int main()
 {
-
-//        pc.baud(115200);
-//        BMA  *acc = new BMA(i2c);
-//        Thread::wait(100);
         Thread shellThread(shellThreadProc, NULL, osPriorityBelowNormal, sizeof(shellStack), shellStack);
         pShellThread = &shellThread;
+        Thread evUartThread(evUartThreadProc, NULL, osPriorityBelowNormal, sizeof(evUartStack), evUartStack);
+        Thread evTimerThread(evTimerThreadProc, NULL, osPriorityBelowNormal, sizeof(evTimerStack), evTimerStack);
 
         while(1)
         {
-//            printf("new printf. %d\r\n", i++);
             myled = !myled;
             Thread::wait(2000);
-//            wait(1);
         }
 }
+
+extern "C" {
+void electronicVehicleSendData(uint8_t* pBuf, uint32_t len)
+{
+    int i = 0;
+
+    TracePrint("sending:");
+    for (i = 0; i < len; i++)
+    {
+        TracePrint("%d ,", pBuf[i]);
+        evThread.pBtUart->putc((int)pBuf[i]);
+    }
+    Trace("  end of sending...");
+}
+}
+
 

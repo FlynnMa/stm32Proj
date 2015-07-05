@@ -2,7 +2,10 @@
 #include "shell.h"
 #include "trace.h"
 #include "sensors.h"
+#include "electronicVehicleCustom.h"
 
+
+extern electronicVehicleCustomDataType evCustomData;
 static void cmdJoke(unsigned int argc, char *argv[], int *result)
 {
   const char aJok[] = "A successful marriage is based on give & take:\r\n"
@@ -16,8 +19,9 @@ static void cmdJoke(unsigned int argc, char *argv[], int *result)
   TraceLine();
 }
 
-void cmdLogOrientationOn(unsigned int argc, char *argv[], int *result)
+void cmdSetBatteryVoltage(unsigned int argc, char *argv[], int *result)
 {
+    evCustomData.voltage = atof(argv[0]);
 
 }
 
@@ -69,7 +73,7 @@ void cmdRequestSyncToken(unsigned int argc, char *argv[], int *result)
 extern const Command custCommands[] =
 {
     {"jok",         "tell me a joke",                           cmdJoke},
-    {"orion",       "enable orientation log",                   cmdLogOrientationOn},
+    {"battery",     "set battery voltage",                      cmdSetBatteryVoltage},
     {"accon",       "enable acc sensor",                        cmdAccOn},
     {"acclog",      "enable acc data log",                      cmdAccLog},
     {"gyroon",      "enable orientation log",                   cmdGyroOn},

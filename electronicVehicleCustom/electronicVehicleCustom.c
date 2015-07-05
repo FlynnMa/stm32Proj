@@ -1,14 +1,19 @@
-
+#include <string.h>
+#ifdef _WINDOWS
 #include "mttty.h"
+#endif
+#include "cmsis.h"
 #include "protocal.h"
 #include "protocalApi.h"
-#include "protocalCustomWin32.h"
+#include "electronicVehicleCustom.h"
+#include "electronicVehicle.h"
+#include "Trace.h"
 
-ProtocalCustomDataType protocalData;
-
+electronicVehicleCustomDataType evCustomData;
 
 /*!
  * Initialize customer enviroment , to be implemented by customer
+ * invoked by electronicVehicleInitialize
  *
  * @param none
  * @return @ERROR_TYPE
@@ -18,51 +23,16 @@ int32_t electronicVehicleCustomInit(void)
     // init uart device
 
     // init default settings
-    protocalData.scheduleDuration = PROTOCAL_CUSTOM_SCHEDULE_DURATION_DEFAULT;
+
+    evCustomData.voltage = 48.2;
+    evCustomData.fullVoltage = 50.1;
+    evCustomData.speed = 12.12;
+
+    return 0;
 }
 
-void electronicVehicleCustomeOnSchedule(uint32_t duration)
-{
-    electronicVehicleSchedule(duration, NULL);
-}
 
-#ifdef _WINDOWS
-void electronicVehicleCustomScheduleTimer(HWND hWnd, UINT nMsg, UINT nTimerid, DWORD dwTime)
-{
-    static DWORD lastTime = 0;
-
-    electronicVehicleCustomeOnSchedule((uint32_t)(dwTime - lastTime));
-    lastTime = dwTime;
-}
-#endif
-
-
-#ifdef _WINDOWS
-UINT_PTR timerID;
-#endif
-/*!
- * Start schedule task for protocal
- */
-int32_t protocalCustomStartSchedule(void)
-{
-#ifdef _WINDOWS
-    timerID = SetTimer(NULL, NULL, protocalData.scheduleDuration, electronicVehicleCustomScheduleTimer);
-#endif
-}
-
-/*!
- * Stop schedule task for protocal
- */
-int32_t protocalCustomStopSchedule(void)
-{
-#ifdef _WINDOWS
-    KillTimer(NULL, timerID);
-#endif
-}
-
-#ifdef _WINDOWS
-extern int mtttySendUart(char *pData, uint32_t length);
-#endif
+void electronicVehicleSendData(uint8_t* pBuf, uint32_t len);
 
 /*!
  * Send buffer data via uart, to be implemented by customer
@@ -77,7 +47,10 @@ int32_t electronicVehicleCustomUartSendData(uint8_t* pBuf, uint32_t len)
 #ifdef _WINDOWS
     if (!mtttySendUart((char*)pBuf, len))
         return ERROR_HW_FAILURE;
+#else
+    electronicVehicleSendData(pBuf, len);
 #endif
+    return 0;
 }
 
 /*!
@@ -88,13 +61,21 @@ int32_t electronicVehicleCustomUartSendData(uint8_t* pBuf, uint32_t len)
  *
  * @return none
  */
-void protocalCustomEvents(EV_EVENT_TYPE event, uint32_t data)
+void electronicVehicleCustomEvents(EV_EVENT_TYPE event, uint32_t data)
 {
+    switch(event)
+    {
+            break;
 
+        default:
+            break;
+    }
 }
 
 /*!
- * Get firmware version
+ * Get firmware version, this is used on the mobile app start up, it may require
+ * the firmware version for checking software compatibility and detect new
+ * firmware availability
  *
  * @param[out] ppBuf  address to be set of firmware version,
  *                        which is ASCII string formate, be sure that the address of *ppBuf
@@ -103,7 +84,8 @@ void protocalCustomEvents(EV_EVENT_TYPE event, uint32_t data)
  *
  * @return @ERROR_TYPE
  */
-int32_t protocalCustomGetFirmwareVersion(const char **ppBuf, uint32_t *pLen)
+int32_t electronicVehicleCustomGetFirmwareVersion(
+    const char **ppBuf, uint8_t *pLen)
 {
     static const char *pVersion = "v0.1";
     *ppBuf = pVersion;
@@ -119,9 +101,11 @@ int32_t protocalCustomGetFirmwareVersion(const char **ppBuf, uint32_t *pLen)
  *
  * @return @ERROR_TYPE
  */
-int32_t protocalCustomGetTemperature(float *pTemperature)
+int32_t electronicVehicleCustomGetTemperature(float *pTemperature)
 {
-    *pTemperature = protocalData.temperature;
+    *pTemperature = evCustomData.temperature;
+
+    return 0;
 }
 
 /*!
@@ -131,9 +115,9 @@ int32_t protocalCustomGetTemperature(float *pTemperature)
  *
  * @return @ERROR_TYPE
  */
-int32_t protocalCustomGetBatteryVoltage(float *pBattery)
+int32_t electronicVehicleCustomGetBatteryVoltage(float *pBattery)
 {
-    *pBattery = protocalData.voltage;
+    *pBattery = evCustomData.voltage;
     return 0;
 }
 
@@ -146,11 +130,11 @@ int32_t protocalCustomGetBatteryVoltage(float *pBattery)
  *
  * @return @ERROR_TYPE
  */
-int32_t protocalCustomGetBatteryRange(float *pBatteryOut, float *pBatteryFull, float *pBatteryLow)
+int32_t electronicVeichleCustomGetBatteryRange(float *pBatteryOut, float *pBatteryFull, float *pBatteryLow)
 {
-    *pBatteryOut = protocalData.outVoltage;
-    *pBatteryFull = protocalData.fullVoltage;
-    *pBatteryLow = protocalData.lowVoltage;
+    *pBatteryOut = evCustomData.outVoltage;
+    *pBatteryFull = evCustomData.fullVoltage;
+    *pBatteryLow = evCustomData.lowVoltage;
     return 0;
 }
 
@@ -161,9 +145,9 @@ int32_t protocalCustomGetBatteryRange(float *pBatteryOut, float *pBatteryFull, f
  *
  * @return @ERROR_TYPE
  */
-int32_t protocalCustomGetMaxSpeed(float *pMaxSpeed)
+int32_t electronicVehicleCustomGetMaxSpeed(float *pMaxSpeed)
 {
-    *pMaxSpeed = protocalData.maxSpeed;
+    *pMaxSpeed = evCustomData.maxSpeed;
     return 0;
 }
 
@@ -174,9 +158,35 @@ int32_t protocalCustomGetMaxSpeed(float *pMaxSpeed)
  *
  * @return @ERROR_TYPE
  */
-int32_t protocalCustomGetSpeed(float *pSpeed)
+int32_t electronicVehicleCustomGetSpeed(float *pSpeed)
 {
-    *pSpeed = protocalData.speed;
+    *pSpeed = evCustomData.speed;
     return 0;
+}
+
+
+int32_t electronicVehicleCustomGetChargeStatus(uint8_t *pCharge)
+{
+    *pCharge = evCustomData.isCharging;
+}
+
+
+void electronicVehicleCustomOnAckFailed(uint8_t cmdID,
+    uint8_t err)
+{
+    TraceDebug("ack failed on cmd:%d, err:%d", cmdID, err);
+}
+
+/*!
+ * set total mile, this function is received after target request mile data from
+ * mobile phone, normally it is invoked after power up, the target has loss its
+ * data, while it contains a backup on mobile phone
+ *
+ * @param[in] mile total mile counted
+ *
+ */
+void electronicVehicleCustomSetMile(uint32_t mile)
+{
+    evCustomData.mile = mile;
 }
 

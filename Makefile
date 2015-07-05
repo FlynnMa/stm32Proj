@@ -24,7 +24,7 @@ SIZE 	= $(GCC_BIN)arm-none-eabi-size
 CPU = -mcpu=cortex-m3 -mthumb
 CC_FLAGS = $(CPU) -c -g -fno-common -fmessage-length=0 -Wall -fno-exceptions -ffunction-sections -fdata-sections -fomit-frame-pointer
 CC_FLAGS += -MMD -MP
-CC_SYMBOLS = -DTARGET_NUCLEO_F103RB -DTARGET_STM32F103RB -DTARGET_M3 -DTARGET_CORTEX_M -DSTM32F10X_MD -DTARGET_STM -DTARGET_STM32F1 -DTARGET_STM32F103RB -DTOOLCHAIN_GCC_ARM -DTOOLCHAIN_GCC -D__CORTEX_M3 -DARM_MATH_CM3 -DMBED_BUILD_TIMESTAMP=1433225014.31 -D__MBED__=1 -DTARGET_FF_ARDUINO -DTARGET_FF_MORPHO 
+CC_SYMBOLS = -DTARGET_NUCLEO_F103RB -DTARGET_STM32F103RB -DTARGET_M3 -DTARGET_CORTEX_M -DSTM32F10X_MD -DTARGET_STM -DTARGET_STM32F1 -DTARGET_STM32F103RB -DTOOLCHAIN_GCC_ARM -DTOOLCHAIN_GCC -D__CORTEX_M3 -DARM_MATH_CM3 -DMBED_BUILD_TIMESTAMP=1433225014.31 -D__MBED__=1 -DTARGET_FF_ARDUINO -DTARGET_FF_MORPHO
 
 LD_FLAGS = $(CPU) -Wl,--gc-sections --specs=nano.specs -u _printf_float -u _scanf_float -Wl,--wrap,main
 LD_FLAGS += -Wl,-Map=$(PROJECT).map,--cref
@@ -41,6 +41,21 @@ OBJECTS += ./util/trace.o util/util.o
 INCLUDE_PATHS += -I./util
 OBJECTS += ./commands/commands.o
 INCLUDE_PATHS += -I./commands
+
+OBJECTS += electronicVehicle/electronicVehicle.o
+INCLUDE_PATHS += -IelectronicVehicle
+
+OBJECTS += electronicVehicleCustom/electronicVehicleCustom.o
+INCLUDE_PATHS += -IelectronicVehicleCustom
+
+OBJECTS += protocal/protocal.o
+INCLUDE_PATHS += -Iprotocal
+
+OBJECTS += electronicVehicleThread/electronicVehicleThread.o
+INCLUDE_PATHS += -IelectronicVehicleThread
+
+OBJECTS += list/list.o
+INCLUDE_PATHS += -Ilist
 
 ifeq ($(DEBUG), 1)
   CC_FLAGS += -DDEBUG -O0

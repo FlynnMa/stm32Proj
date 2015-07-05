@@ -98,6 +98,10 @@
 #define TraceDebug(fmt, args...)
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * @brief Initialize Fdtrace with a serial instance
  *
@@ -138,5 +142,11 @@ void TraceLine(void);
  * @return none
  */
 void TracePrint(const char *fmt, ...);
+
+#ifdef __cplusplus
+}
+#endif
+
+
 
 #endif

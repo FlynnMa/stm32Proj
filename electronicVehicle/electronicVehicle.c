@@ -1,13 +1,24 @@
+#include <string.h>
 #include "protocal.h"
 #include "electronicVehicle.h"
 #include "protocalApi.h"
 #ifdef _WINDOWS
 #include "simulator.h"
 #endif
+#include "electronicVehicleCustom.h"
+#include "Trace.h"
+
+#define ELECTRONIC_VEHICLE_DEVICE_ID_TAOTAO    0x10001000 /* device id for
+TAOTAO */
+
+#define ELECTRONIC_VEHICLE_DEVICE ELECTRONIC_VEHICLE_DEVICE_ID_TAOTAO
+
+const char deviceName[] = "Taotao Intelligent";
 
 ElectronicVehicleDataType vehicle;
 static ProtocalStatusType     communicator;
 
+extern void electronicVehicleCustomWait(void);
 /*
  * @brief initialize for electronic Vehicle devices
  *
@@ -18,36 +29,16 @@ static ProtocalStatusType     communicator;
  */
 int32_t electronicVehicleInitialize(void)
 {
-    int32_t ret = SUCCESS;
-
-    ret = electronicVehicleCustomInit();
-    if (SUCCESS != ret)
-    {
-      return ret;
-    }
+    int32_t ret = EV_SUCCESS;
 
     ret = protocalInit(&communicator);
-    if (SUCCESS != ret)
+    if (EV_SUCCESS != ret)
     {
         return ret;
     }
 
-    ret = protocalCustomGetBatteryRange(&vehicle.minVoltage,
-              &vehicle.maxVoltage, &vehicle.lowVoltage);
-    if (SUCCESS != ret)
-    {
-      return ret;
-    }
-
-    ret = protocalCustomGetFirmwareVersion(&vehicle.pFirmwareVersion,
-      &vehicle.firmwareVersionLen);
-    if (SUCCESS != ret)
-    {
-      return ret;
-    }
-
-    ret = protocalCustomGetMaxSpeed(&vehicle.maxSpeed);
-    if (SUCCESS != ret)
+    ret = electronicVehicleCustomInit();
+    if (EV_SUCCESS != ret)
     {
       return ret;
     }
@@ -55,66 +46,135 @@ int32_t electronicVehicleInitialize(void)
     protocalInit(&communicator);
     protocalSetOnCmdCallback(&communicator, electronicVehicleOnCmd);
     protocalSetSendDataFunc(&communicator, electronicVehicleCustomUartSendData);
-
+    protocalSetWaitFunc(&communicator, electronicVehicleCustomWait);
     return ret;
 }
 
-int32_t electronicVehicleOnCmd(uint8_t cmd, uint8_t *pData, uint32_t len)
+/*! Response on the query commands
+ *
+ * @param[in] cmd     command id
+ * @param[in] pData   data according with command id
+ * @param[in] len     length of pData
+ *
+ * @return @ERROR_TYPE
+ */
+int32_t onCmdQuery(uint8_t cmd, uint8_t *pData, uint8_t len)
 {
-    int32_t ret = SUCCESS;
+    uint32_t  deviceID = ELECTRONIC_VEHICLE_DEVICE;
+    const char *pVer;
+    uint8_t size;
+    float   fData;
+    uint8_t byte;
 
+    Trace("onCmdQuery: %d", cmd);
     switch(cmd)
     {
-        case CMD_ID_QUERY_DEVICE_ID:
+
+        case CMD_ID_DEVICE_ID:
+            protocalSendCmd(&communicator, CMD_TYPE_SET,
+                CMD_ID_DEVICE_ID,
+                (void*)&deviceID, sizeof(deviceID));
             break;
 
-        case CMD_ID_QUERY_DEVICE_NAME:
+        case CMD_ID_DEVICE_NAME:
+            protocalSendCmd(&communicator, CMD_TYPE_SET,
+                CMD_ID_DEVICE_NAME,
+                (void*)deviceName, sizeof(deviceName));
             break;
 
-        case CMD_ID_QUERY_FIRMWARE_VERSION:
+        case CMD_ID_FIRMWARE_VERSION:
+            electronicVehicleCustomGetFirmwareVersion(&pVer, &size);
+            protocalSendCmd(&communicator, CMD_TYPE_SET,
+                CMD_ID_FIRMWARE_VERSION,
+                (void*)pVer, size);
             break;
 
-        case CMD_ID_QUERY_MAINBOARD_TEMPERITURE:
+        case CMD_ID_MAINBOARD_TEMPERITURE:
+            electronicVehicleCustomGetTemperature(&fData);
+            protocalSendCmd(&communicator, CMD_TYPE_SET,
+                CMD_ID_MAINBOARD_TEMPERITURE,
+                (void*)&fData, sizeof(float));
             break;
 
-        case CMD_ID_QUERY_SPEED:
+        case CMD_ID_SPEED:
+            electronicVehicleCustomGetSpeed(&fData);
+            protocalSendCmd(&communicator,CMD_TYPE_SET,
+                CMD_ID_SPEED,
+                (void*)&fData, sizeof(float));
             break;
 
-        case CMD_ID_QUERY_BATTERY_VOLTAGE:
+        case CMD_ID_BATTERY_VOLTAGE:
+            electronicVehicleCustomGetBatteryVoltage(&fData);
+            protocalSendCmd(&communicator,CMD_TYPE_SET,
+                CMD_ID_BATTERY_VOLTAGE,
+                (void*)&fData, sizeof(float));
             break;
 
-        case CMD_ID_QUERY_CHARGE_STATUS:
+        case CMD_ID_CHARGE_STATUS:
+            electronicVehicleCustomGetChargeStatus(&byte);
+            protocalSendCmd(&communicator, CMD_TYPE_SET,
+                CMD_ID_CHARGE_STATUS,
+                (void*)&byte, 1);
             break;
 
-        case CMD_ID_SET_REPORT_DURATION:
-            if (len != 4)
-                return ERROR_INVALID_PARAM;
-//            vehicle.reportDuration = *(uint32_t*)pData;
+        case CMD_ID_MILE:
             break;
 
-        case CMD_ID_SET_BLUETOOTH_CONNECTION:
-//            vehicle.connectionStatus = *pData;
-//            protocalCustomEvents(EV_EVENT_BLUETOOTH_CONNECTION,
-//                vehicle.connectionStatus);
+        default:
             break;
-
-        case CMD_ID_SET_UART_HARDWARE_FLOW:
-            break;
-
-        case CMD_ID_RESET_STATUS:
-//            vehicle.protocalStatus = PROTOCAL_STATUS_CMD;
-//            vehicle.cmd = 255;
-            break;
-
-        case CMD_ID_SET_BATTERY_INTERVAL:
-            memcpy(&vehicle.intervalBattery, pData, sizeof(vehicle.intervalBattery));
-            break;
-
-       default:
-        break;
     }
 
-    return ret;
+    return EV_SUCCESS;
+}
+
+int32_t onCmdSet(uint8_t cmd, uint8_t *pData, uint8_t len)
+{
+    Trace("onCmdSet: %d", cmd);
+    switch(cmd)
+    {
+        case CMD_ID_MILE:
+            break;
+
+        case CMD_ID_RESET_TARGET:
+            electronicVehicleCustomEvents(EV_EVENT_BLUETOOTH_CONNECTION,
+                (uint32_t)(*pData));
+            break;
+
+        default:
+            break;
+    }
+}
+
+/*!
+ * Response on the remote commands
+ *
+ * @param pSpeed[out] get current speed
+ *
+ * @return @ERROR_TYPE
+ */
+int32_t electronicVehicleOnCmd(uint8_t cmdType,
+            uint8_t cmd, uint8_t *pData, uint8_t len)
+{
+    int32_t ret = EV_SUCCESS;
+
+    switch(cmdType)
+    {
+        case CMD_TYPE_QUERY:
+            onCmdQuery(cmd, pData, len);
+            break;
+
+        case CMD_TYPE_SET:
+            onCmdSet(cmd, pData, len);
+            break;
+
+        case CMD_TYPE_ACK:
+            break;
+
+        default:
+            break;
+    }
+
+    return EV_SUCCESS;
 }
 
 /*
@@ -127,82 +187,17 @@ int32_t electronicVehicleOnCmd(uint8_t cmd, uint8_t *pData, uint32_t len)
  */
 void electronicVehicleOnAck(uint8_t cmd, uint8_t result)
 {
-    if(result == SUCCESS)
+    if(result == EV_SUCCESS)
     {
         return;
     }
-
-    switch(cmd)
-    {
-        // ERROR_UNSUPPORTED : unsupported device
-        case CMD_ID_REPORT_DEVICE_ID:
-            break;
-
-        // ERROR_UNSUPPORTED : version is not matching for this apk
-        case CMD_ID_REPORT_FIRMWARE_VERSION:
-            break;
-
-        default:
-            break;
-    }
 }
 
 /*!
- * Protocal schedule for doing regular analysis and reporting
- *
- * @param[in] duration duration in ms since last report
- *
- * @return none
- */
-void electronicVehicleSchedule(uint32_t duration, void *pData)
-{
-    float speed;
-    float batteryVoltage;
-    int32_t ret;
-
-    vehicle.timerBattery += duration;
-    if (vehicle.timerBattery >= vehicle.intervalBattery)
-    {
-        ret = protocalCustomGetBatteryVoltage(&batteryVoltage);
-        if (ret != SUCCESS)
-        {
-            return;
-        }
-
-        vehicle.timerBattery = 0;
-        protocalSendCmd(&communicator, CMD_ID_REPORT_BATTERY_VOLTAGE,
-            (void*)&batteryVoltage, sizeof(batteryVoltage));
-    }
-
-    vehicle.timerSpeed += duration;
-    if (vehicle.timerSpeed >= vehicle.intervalSpeed)
-    {
-        ret = protocalCustomGetSpeed(&speed);
-        if (ret != SUCCESS)
-        {
-            return;
-        }
-
-        vehicle.timerSpeed = 0;
-        protocalSendCmd(&communicator, CMD_ID_REPORT_CURRENT_SPEED,
-            (void*)&speed, sizeof(speed));
-    }
-
-}
-
-void electronicVehicleSetBatteryInterval(uint32_t interval)
-{
-    vehicle.intervalBattery = interval;
-}
-
-
-void electronicVehicleSetSpeedInterval(uint32_t interval)
-{
-    vehicle.intervalSpeed = interval;
-}
-
-/*!
- * This function response characters when data is received
+ * This function response characters when data is received, data will be
+ * transferred into low level protocal for further analysis.
+ * Notice: this function must be invoked in an individual thread.
+ * Make sure it will not be blocked by other tasks
  *
  * @param[in] ch
  *
@@ -211,5 +206,36 @@ void electronicVehicleSetSpeedInterval(uint32_t interval)
 void electronicVehicleOnChar(uint8_t ch)
 {
     protocalUartReceiveChar(&communicator, ch);
+}
+
+/*
+ * @brief This function dispatch received events to customer applications
+ * Notice, this function must be invoked in an individual thread, make sure it
+ * wont be blocked by anything!
+ *
+ * @param none
+ *
+ * @return @ERROR_TYPE
+ */
+int32_t electronicVehicleDispatchEvents(void)
+{
+    return protocalDispatchEvents(&communicator);
+}
+
+/*
+ * This function returns the device connection status
+ * On the startup, if bluetooth connection has been established, a handshake
+ * between BT and mobile phone will be executed, if success, the connection
+ * is established
+ *
+ * @param none
+ *
+ * @return
+ * 0: disconnected
+ * 1: connected
+ */
+uint8_t electronicVehicleIsConnected(void)
+{
+    return protocalIsConnected(&communicator);
 }
 

@@ -1,4 +1,7 @@
 #include <stdarg.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
 #include "trace.h"
 
 /*

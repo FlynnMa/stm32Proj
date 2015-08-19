@@ -48,7 +48,7 @@ INCLUDE_PATHS += -IelectronicVehicle
 OBJECTS += electronicVehicleCustom/electronicVehicleCustom.o
 INCLUDE_PATHS += -IelectronicVehicleCustom
 
-OBJECTS += protocal/protocal.o
+OBJECTS += protocal/protocal.o protocal/protocalApi.o protocal/protocalInternal.o
 INCLUDE_PATHS += -Iprotocal
 
 OBJECTS += electronicVehicleThread/electronicVehicleThread.o
@@ -81,6 +81,8 @@ clean:
 $(PROJECT).elf: $(OBJECTS) $(SYS_OBJECTS)
 	$(LD) $(LD_FLAGS) -T$(LINKER_SCRIPT) $(LIBRARY_PATHS) -o $@ $^ $(LIBRARIES) $(LD_SYS_LIBS) $(LIBRARIES) $(LD_SYS_LIBS)
 	$(SIZE) $@
+	$(hide) $(SIZE) -Ax -d $@ >> $(PROJECT).map
+	$(hide) $(SIZE) -Bx -d $@ >> $(PROJECT).map
 
 $(PROJECT).bin: $(PROJECT).elf
 	@$(OBJCOPY) -O binary $< $@

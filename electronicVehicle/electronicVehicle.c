@@ -13,10 +13,7 @@ TAOTAO */
 
 #define ELECTRONIC_VEHICLE_DEVICE ELECTRONIC_VEHICLE_DEVICE_ID_TAOTAO
 
-const char deviceName[] = "Taotao Intelligent";
-
-ElectronicVehicleDataType vehicle;
-static ProtocalStatusType     communicator;
+const char deviceName[] = "Yeth Intelligent";
 
 extern void electronicVehicleCustomWait(void);
 /*
@@ -31,22 +28,15 @@ int32_t electronicVehicleInitialize(void)
 {
     int32_t ret = EV_SUCCESS;
 
-    ret = protocalInit(&communicator);
-    if (EV_SUCCESS != ret)
-    {
-        return ret;
-    }
-
     ret = electronicVehicleCustomInit();
     if (EV_SUCCESS != ret)
     {
       return ret;
     }
 
-    protocalInit(&communicator);
-    protocalSetOnCmdCallback(&communicator, electronicVehicleOnCmd);
-    protocalSetSendDataFunc(&communicator, electronicVehicleCustomUartSendData);
-    protocalSetWaitFunc(&communicator, electronicVehicleCustomWait);
+    ret = protocalApiInit(electronicVehicleCustomUartSendData,
+            electronicVehicleOnCmd, NULL, electronicVehicleCustomWait, NULL);
+
     return ret;
 }
 
@@ -60,66 +50,76 @@ int32_t electronicVehicleInitialize(void)
  */
 int32_t onCmdQuery(uint8_t cmd, uint8_t *pData, uint8_t len)
 {
-    uint32_t  deviceID = ELECTRONIC_VEHICLE_DEVICE;
-    const char *pVer;
-    uint8_t size;
+    uint32_t  deviceID = ELECTRONIC_VEHICLE_DEVICE, u32Data;
+    GeneralInfoL infoL;
+    GeneralInfoS infoS;
     float   fData;
     uint8_t byte;
 
-    Trace("onCmdQuery: %d", cmd);
+//    Trace("onCmdQuery: %d", cmd);
     switch(cmd)
     {
 
         case CMD_ID_DEVICE_ID:
-            protocalSendCmd(&communicator, CMD_TYPE_SET,
-                CMD_ID_DEVICE_ID,
-                (void*)&deviceID, sizeof(deviceID));
+            protocalApiSetU32(cmd, deviceID);
             break;
 
         case CMD_ID_DEVICE_NAME:
-            protocalSendCmd(&communicator, CMD_TYPE_SET,
-                CMD_ID_DEVICE_NAME,
-                (void*)deviceName, sizeof(deviceName));
+            protocalApiSetStr(cmd, deviceName);
             break;
 
         case CMD_ID_FIRMWARE_VERSION:
-            electronicVehicleCustomGetFirmwareVersion(&pVer, &size);
-            protocalSendCmd(&communicator, CMD_TYPE_SET,
-                CMD_ID_FIRMWARE_VERSION,
-                (void*)pVer, size);
+            electronicVehicleCustomGetFirmwareVersion(&u32Data);
+            protocalApiSetU32(cmd, u32Data);
             break;
 
         case CMD_ID_MAINBOARD_TEMPERITURE:
             electronicVehicleCustomGetTemperature(&fData);
-            protocalSendCmd(&communicator, CMD_TYPE_SET,
-                CMD_ID_MAINBOARD_TEMPERITURE,
-                (void*)&fData, sizeof(float));
+            protocalApiSetFloat(cmd, fData);
             break;
 
         case CMD_ID_SPEED:
             electronicVehicleCustomGetSpeed(&fData);
-            protocalSendCmd(&communicator,CMD_TYPE_SET,
-                CMD_ID_SPEED,
-                (void*)&fData, sizeof(float));
+            protocalApiSetFloat(cmd, fData);
             break;
 
         case CMD_ID_BATTERY_VOLTAGE:
             electronicVehicleCustomGetBatteryVoltage(&fData);
-            protocalSendCmd(&communicator,CMD_TYPE_SET,
-                CMD_ID_BATTERY_VOLTAGE,
-                (void*)&fData, sizeof(float));
+            protocalApiSetFloat(cmd, fData);
             break;
 
         case CMD_ID_CHARGE_STATUS:
             electronicVehicleCustomGetChargeStatus(&byte);
-            protocalSendCmd(&communicator, CMD_TYPE_SET,
-                CMD_ID_CHARGE_STATUS,
-                (void*)&byte, 1);
+            protocalApiSetU8(cmd, byte);
+            break;
+
+        case CMD_ID_FULL_BATTERY:
+            electronicVeichleCustomGetBatteryRange(NULL,&fData,NULL);
+            protocalApiSetFloat(cmd, fData);
             break;
 
         case CMD_ID_MILE:
+            electronicVehicleCustomGetMile(&u32Data);
+            protocalApiSetU32(cmd, u32Data);
             break;
 
+        case CMD_ID_POWER_ONOFF:
+            protocalApiSetU8(cmd, 1);
+            break;
+
+        case CMD_ID_GENERAL_LONG:
+            electronicVehicleCustomGetBatteryVoltage(&infoL.battery);
+            electronicVehicleCustomGetTemperature(&infoL.temperature);
+            infoL.incharge = 0;
+            protocalApiSetBuff(cmd, &infoL, sizeof(infoL));
+            break;
+
+        case CMD_ID_GENERAL_SHORT:
+            electronicVehicleCustomGetSpeed(&infoS.speed);
+            electronicVehicleCustomGetMile(&infoS.mile);
+            elecronicVehicleCustomGetCurrent(&infoS.current);
+            protocalApiSetBuff(cmd, &infoS, sizeof(infoS));
+            break;
         default:
             break;
     }
@@ -129,20 +129,21 @@ int32_t onCmdQuery(uint8_t cmd, uint8_t *pData, uint8_t len)
 
 int32_t onCmdSet(uint8_t cmd, uint8_t *pData, uint8_t len)
 {
-    Trace("onCmdSet: %d", cmd);
+//    Trace("onCmdSet: %d", cmd);
     switch(cmd)
     {
         case CMD_ID_MILE:
+            electronicVehicleCustomSetMile(*(uint32_t*)pData);
             break;
 
         case CMD_ID_RESET_TARGET:
-            electronicVehicleCustomEvents(EV_EVENT_BLUETOOTH_CONNECTION,
-                (uint32_t)(*pData));
             break;
 
         default:
             break;
     }
+
+    return 0;
 }
 
 /*!
@@ -155,7 +156,6 @@ int32_t onCmdSet(uint8_t cmd, uint8_t *pData, uint8_t len)
 int32_t electronicVehicleOnCmd(uint8_t cmdType,
             uint8_t cmd, uint8_t *pData, uint8_t len)
 {
-    int32_t ret = EV_SUCCESS;
 
     switch(cmdType)
     {
@@ -193,49 +193,4 @@ void electronicVehicleOnAck(uint8_t cmd, uint8_t result)
     }
 }
 
-/*!
- * This function response characters when data is received, data will be
- * transferred into low level protocal for further analysis.
- * Notice: this function must be invoked in an individual thread.
- * Make sure it will not be blocked by other tasks
- *
- * @param[in] ch
- *
- * @return none
- */
-void electronicVehicleOnChar(uint8_t ch)
-{
-    protocalUartReceiveChar(&communicator, ch);
-}
-
-/*
- * @brief This function dispatch received events to customer applications
- * Notice, this function must be invoked in an individual thread, make sure it
- * wont be blocked by anything!
- *
- * @param none
- *
- * @return @ERROR_TYPE
- */
-int32_t electronicVehicleDispatchEvents(void)
-{
-    return protocalDispatchEvents(&communicator);
-}
-
-/*
- * This function returns the device connection status
- * On the startup, if bluetooth connection has been established, a handshake
- * between BT and mobile phone will be executed, if success, the connection
- * is established
- *
- * @param none
- *
- * @return
- * 0: disconnected
- * 1: connected
- */
-uint8_t electronicVehicleIsConnected(void)
-{
-    return protocalIsConnected(&communicator);
-}
 

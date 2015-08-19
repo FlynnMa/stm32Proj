@@ -3,6 +3,7 @@
 #include "electronicVehicleThread.h"
 #include "electronicVehicle.h"
 #include "electronicVehicleCustom.h"
+#include "protocalApi.h"
 #include "trace.h"
 
 void electronicVehicleThread::rxInterrupt(void)
@@ -41,15 +42,14 @@ void electronicVehicleThread::uartThread(void const *argument)
         }
 
         ch = (char)evt.value.v;
-        TracePrint("0x%02x", ch);
         if (i ++ >= 7)
         {
             i = 0;
-            Trace("");
+//            Trace("");
         }
-        electronicVehicleOnChar(ch);
+        protocalApiReceiveChar(ch);
 
-        TracePrint(", ", ch);
+//        TracePrint(", ", ch);
     }
 }
 
@@ -57,16 +57,9 @@ void electronicVehicleThread::timerThread(void const *argument)
 {
     while(1)
     {
-        Thread::wait(1);
+        Thread::wait(10);
 
-        if (electronicVehicleIsConnected() == 0)
-        {
-            continue;
-        }
-
-        electronicVehicleDispatchEvents();
-
-//        electronicVehicleSchedule(reportDuration);
+        protocalApiDispatchEvents();
     }
 }
 

@@ -10,6 +10,10 @@
 #include "Trace.h"
 
 electronicVehicleCustomDataType evCustomData;
+const char version[4] = {SOFTWARE_VERSION_MAJOR,
+                        SOFTWARE_VERSION_SUB,
+                        SOFTWARE_VERSION_MODIFY,
+                        SOFTWARE_VERSION_YEAR};
 
 /*!
  * Initialize customer enviroment , to be implemented by customer
@@ -26,13 +30,16 @@ int32_t electronicVehicleCustomInit(void)
 
     evCustomData.voltage = 48.2;
     evCustomData.fullVoltage = 50.1;
+    evCustomData.lowVoltage = 37.43;
     evCustomData.speed = 12.12;
+    evCustomData.current = 1.55;
+    evCustomData.temperature = 39;
 
     return 0;
 }
 
 
-void electronicVehicleSendData(uint8_t* pBuf, uint32_t len);
+extern void electronicVehicleSendData(uint8_t* pBuf, uint32_t len);
 
 /*!
  * Send buffer data via uart, to be implemented by customer
@@ -44,32 +51,8 @@ void electronicVehicleSendData(uint8_t* pBuf, uint32_t len);
  */
 int32_t electronicVehicleCustomUartSendData(uint8_t* pBuf, uint32_t len)
 {
-#ifdef _WINDOWS
-    if (!mtttySendUart((char*)pBuf, len))
-        return ERROR_HW_FAILURE;
-#else
     electronicVehicleSendData(pBuf, len);
-#endif
     return 0;
-}
-
-/*!
- * protocal events response, to be implemented by customer
- *
- * @param[in] event event to be responsed, relate to @EV_EVENT_TYPE
- * @param[in] data  data corresponding with event
- *
- * @return none
- */
-void electronicVehicleCustomEvents(EV_EVENT_TYPE event, uint32_t data)
-{
-    switch(event)
-    {
-            break;
-
-        default:
-            break;
-    }
 }
 
 /*!
@@ -77,19 +60,15 @@ void electronicVehicleCustomEvents(EV_EVENT_TYPE event, uint32_t data)
  * the firmware version for checking software compatibility and detect new
  * firmware availability
  *
- * @param[out] ppBuf  address to be set of firmware version,
- *                        which is ASCII string formate, be sure that the address of *ppBuf
- *                        is a const char type which will not be released
- * @param[out] pLen   length of ppBuf contents
+ * @param[out] pVer  address to be set of firmware version,
+ *                        4bytes version in binary formate
  *
  * @return @ERROR_TYPE
  */
 int32_t electronicVehicleCustomGetFirmwareVersion(
-    const char **ppBuf, uint8_t *pLen)
+    uint32_t *pVer)
 {
-    static const char *pVersion = "v0.1";
-    *ppBuf = pVersion;
-    *pLen = strlen(pVersion) + 1;
+    memcpy(pVer, version, 4);
 
     return 0;
 }
@@ -130,12 +109,40 @@ int32_t electronicVehicleCustomGetBatteryVoltage(float *pBattery)
  *
  * @return @ERROR_TYPE
  */
-int32_t electronicVeichleCustomGetBatteryRange(float *pBatteryOut, float *pBatteryFull, float *pBatteryLow)
+int32_t electronicVeichleCustomGetBatteryRange(
+        float *pBatteryOut,
+        float *pBatteryFull, float *pBatteryLow)
 {
-    *pBatteryOut = evCustomData.outVoltage;
-    *pBatteryFull = evCustomData.fullVoltage;
-    *pBatteryLow = evCustomData.lowVoltage;
+    if (NULL != pBatteryOut)
+    {
+        *pBatteryOut = evCustomData.outVoltage;
+    }
+
+    if (NULL != pBatteryFull)
+    {
+        *pBatteryFull = evCustomData.fullVoltage;
+    }
+
+    if (NULL != pBatteryLow)
+    {
+        *pBatteryLow = evCustomData.lowVoltage;
+    }
     return 0;
+}
+
+/*!
+ * Get electronic current
+ *
+ * @param pCurrent[out]    battery realtime current
+ *
+ * @return @ERROR_TYPE
+ */
+int32_t elecronicVehicleCustomGetCurrent(float *pCurrent)
+{
+    if (NULL != pCurrent)
+    {
+        *pCurrent = evCustomData.current;
+    }
 }
 
 /*!
@@ -168,6 +175,7 @@ int32_t electronicVehicleCustomGetSpeed(float *pSpeed)
 int32_t electronicVehicleCustomGetChargeStatus(uint8_t *pCharge)
 {
     *pCharge = evCustomData.isCharging;
+    return 0;
 }
 
 
@@ -178,15 +186,26 @@ void electronicVehicleCustomOnAckFailed(uint8_t cmdID,
 }
 
 /*!
- * set total mile, this function is received after target request mile data from
+ * set total mile, this function is invoked on the remote request mile data from
  * mobile phone, normally it is invoked after power up, the target has loss its
  * data, while it contains a backup on mobile phone
  *
- * @param[in] mile total mile counted
+ * @param[in] mile total mile counted by mobile phone
  *
  */
 void electronicVehicleCustomSetMile(uint32_t mile)
 {
     evCustomData.mile = mile;
+}
+
+/*!
+ * Get total mile, this function is invoked on the request of mile data by
+ * mobile phone
+ *
+ * @param[i] pMile  total mile counted by embeded end
+ */
+void electronicVehicleCustomGetMile(uint32_t *pMile)
+{
+    *pMile = evCustomData.mile++;
 }
 

@@ -56,7 +56,7 @@ void TraceLine(void)
   int i;
 
   for (i = 0; i < 16; i++)
-    printf("#");
+    printf("-");
   printf("\r\n");
 }
 

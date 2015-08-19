@@ -14,7 +14,6 @@ class electronicVehicleThread {
       Serial *pBtUart;
 
     private:
-      Thread  *m_pthread;
       Queue<uint32_t, 20> m_serialQ;
       uint32_t   reportDuration;
 };

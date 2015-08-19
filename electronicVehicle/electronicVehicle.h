@@ -2,42 +2,84 @@
 #define electronicVehicle_h
 #include <stdint.h>
 
-#define CMD_ID_DEVICE_ID                      0
 
-#define CMD_ID_DEVICE_NAME                    1
+/*
+ * ========================================================
+ * custom command ids supported by onelution electronic vehicle protocal
+ * each command should follow its formate definition, and the data must
+ * strictly limited in the length range
+ * =======================================================
+*/
+#define CMD_ID_DEVICE_ID                      0 /**< 4byte device ID
+                                                        in binary formate */
 
-#define CMD_ID_FIRMWARE_VERSION               2
+#define CMD_ID_DEVICE_NAME                    1 /**< less than 24bytes
+                                                    device name in ASCII formate */
 
-#define CMD_ID_MAINBOARD_TEMPERITURE          3
+#define CMD_ID_FIRMWARE_VERSION               2 /**< 4byte firmware version
+                                                    in binary formate :
+                                                    first:  major
+                                                    second: min
+                                                    third:  modify
+                                                    fourth: reserved */
 
-#define CMD_ID_BATTERY_VOLTAGE                4
+#define CMD_ID_MAINBOARD_TEMPERITURE          3 /**< 4byte temperiture float
+                                                    in binary formate */
 
-#define CMD_ID_CHARGE_STATUS                  5
+#define CMD_ID_BATTERY_VOLTAGE                4 /**< 4bytes voltage float
+                                                    in binary formate */
 
-#define CMD_ID_SPEED                          6
+#define CMD_ID_CHARGE_STATUS                  5 /**< 1byte charging status
+                                                      0 : no charging
+                                                      1 : charging */
 
-#define CMD_ID_MILE                           7
+#define CMD_ID_SPEED                          6 /**< 4bytes speed float in
+                                                    binary formate */
 
-#define CMD_ID_MAX_SPEED                      8
+#define CMD_ID_MILE                           7 /**< 4bytes unsigned int */
 
-#define CMD_ID_LOW_BATTERY                    9
+#define CMD_ID_MAX_SPEED                      8 /**< 4bytes unsigned int */
 
-#define CMD_ID_SHUTDOWN_BATTERY               10
+#define CMD_ID_LOW_BATTERY                    9 /**< 4bytes float in binary */
 
-#define CMD_ID_FULL_BATTERY                   11
+#define CMD_ID_SHUTDOWN_BATTERY               10 /**< 4bytes float in binary */
+
+#define CMD_ID_FULL_BATTERY                   11 /**< 4bytes float in binary */
+
+#define CMD_ID_POWER_ONOFF                    12 /**< 1 byte power onoff
+                                                            status */
+
+#define CMD_ID_DRIVE_MODE                     13 /**< 1 byte drive mode */
+
+#define CMD_ID_CURRENT                        14 /**< 4 bytes int32 value in mA*/
+
+#define CMD_ID_PERIOD_LONG                    15 /**< 4 bytes int32 value in ms
+                                      this defines update rate of long period
+                                      range 1000 ~ 10000 */
+
+#define CMD_ID_PERIOD_SHORT                    16 /**< 4 bytes int32 value in ms
+                                      this defines update rate of short period
+                                      range 200 ~ 1000 */
+
+#define CMD_ID_GENERAL_LONG            17  /**< a combined command, contains
+                                      battery, temperature, charge status */
+
+#define CMD_ID_GENERAL_SHORT           18 /**< a combined command queried in short
+                                      duration, contains speed, current, mile */
 
 
-typedef struct ElectronicVehicleDataType {
 
-    uint32_t     timerBattery;   /* calculate timer duration
-                                  for reporting battery */
-    uint32_t     timerSpeed;     /* calculate timer duration for report speed */
+typedef struct GeneralInfoLongType {
+    float    battery;
+    float    temperature;
+    int32_t  incharge;
+} GeneralInfoL;
 
-    uint32_t     intervalBattery;
-
-    uint32_t     intervalSpeed;
-
-} ElectronicVehicleDataType;
+typedef struct GeneralInfoShortType {
+    uint32_t mile;
+    float speed;
+    float    current;
+} GeneralInfoS;
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,15 +96,6 @@ extern "C" {
 int32_t electronicVehicleInitialize(void);
 
 /*!
- * Protocal schedule for doing regular analysis and reporting
- *
- * @param[in] duration duration in ms since last report
- *
- * @return none
- */
-void electronicVehicleSchedule(uint32_t duration);
-
-/*!
  * Response on the remote commands
  *
  * @param pSpeed[out] get current speed
@@ -74,42 +107,7 @@ void electronicVehicleSchedule(uint32_t duration);
 int32_t electronicVehicleOnCmd(uint8_t cmdType, uint8_t cmd,
                     uint8_t *pData, uint8_t len);
 
-/*!
- * This function response characters when data is received, data will be
- * transferred into low level protocal for further analysis.
- * Notice: this function must be invoked in an individual thread.
- * Make sure it will not be blocked by other tasks
- *
- * @param[in] ch
- *
- * @return none
- */
-void electronicVehicleOnChar(uint8_t ch);
 
-/*
- * @brief This function dispatch received events to customer applications
- * Notice, this function must be invoked in an individual thread, make sure it
- * wont be blocked by anything!
- *
- * @param none
- *
- * @return @ERROR_TYPE
- */
-int32_t electronicVehicleDispatchEvents(void);
-
-/*
- * This function returns the device connection status
- * On the startup, if bluetooth connection has been established, a handshake
- * between BT and mobile phone will be executed, if success, the connection
- * is established
- *
- * @param none
- *
- * @return
- * 0: disconnected
- * 1: connected
- */
-uint8_t electronicVehicleIsConnected(void);
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,14 @@
 #include "protocalApi.h"
 #include "trace.h"
 
+static const uint8_t headerMagic[4] =
+{
+    203,102,124,114
+};
+
+static int32_t protocalAllocEmptyEventMemory(
+        ProtocalStatusType *pProtocal, EventStackType **ppEvent);
+
 /*!
  * Initialize protocal
 
@@ -17,9 +25,14 @@ int32_t protocalInit(ProtocalStatusType *pProtocal)
 {
     memset(pProtocal, 0, sizeof(ProtocalStatusType));
     pProtocal->bufferIndex = 0;
-    pProtocal->connectionStatus = 0;
+    pProtocal->connectionStatus = 1;
     pProtocal->checkSum = 0;
     pProtocal->cmd = CMD_ID_INVALID;
+
+    pProtocal->package[0] = headerMagic[0];
+    pProtocal->package[1] = headerMagic[1];
+    pProtocal->package[2] = headerMagic[2];
+    pProtocal->package[3] = headerMagic[3];
     return 0;
 }
 
@@ -33,48 +46,76 @@ int32_t protocalInit(ProtocalStatusType *pProtocal)
  * @return none
  */
 void protocalMakePackage(ProtocalStatusType *pProtocal, uint8_t cmdType,
-        uint8_t cmd, void *pData, uint8_t lengthOfData)
+        uint8_t cmd, const void *pData, uint8_t lengthOfData)
 {
     uint8_t checkSum = 0;
     uint8_t i;
 
-    pProtocal->package[0] = cmdType;
-    pProtocal->package[1] = lengthOfData + 2;
-    pProtocal->package[2] = cmd;
+//    memset(pProtocal->package[4], 0, sizeof(pProtocal->package));
+
+    pProtocal->package[4] = cmdType;
+    pProtocal->package[5] = lengthOfData + 2;
+    pProtocal->package[6] = cmd;
     if (NULL != pData)
     {
-        memcpy(&pProtocal->package[3], pData, lengthOfData);
+        memcpy(&pProtocal->package[7], pData, lengthOfData);
     }
 
-    for(i = 0; i < lengthOfData + 3; i++)
+    /* calculate checksum without header */
+    for(i = 4; i < lengthOfData + 7; i++)
     {
         checkSum += pProtocal->package[i];
     }
-    pProtocal->package[lengthOfData + 3] = checkSum;
-    pProtocal->packageSize = lengthOfData + 4;
+    pProtocal->package[lengthOfData + 7] = checkSum;
+    pProtocal->packageSize = lengthOfData + 8;
 }
 
+void protocalRouterPackage(ProtocalStatusType *pProtocal,
+    void *pkg, int32_t pkgLen)
+{
+    EventStackType *pEvent;
+    int32_t         ret;
+
+    ret = protocalAllocEmptyEventMemory(pProtocal, &pEvent);
+    if (ret)
+    {
+        return;
+    }
+
+    memcpy(pEvent->buff, pkg, pkgLen);
+    pEvent->cmdType = CMD_TYPE_ROUTER;
+    pEvent->buffSize = pkgLen;
+    listAdd(&pProtocal->eventStack, (uint32_t)pEvent);
+}
+
+/*
+ * add cmd to package
+ */
+void protocalPackageAddCmd()
+{
+
+}
+
+/*!
+ * Ackknoledge to the host or slave
+ *
+ * @param[in] result
+ *
+ * @return none
+ */
 void protocalAck(ProtocalStatusType *pProtocal, uint8_t result)
 {
-/*
-    uint8_t buf[5];
-    uint8_t i;
+    EventStackType *pEvent;
 
-    buf[0] = CMD_TYPE_ACK;
-    buf[1] = 2;
-    buf[2] = pProtocal->cmd;
-    buf[3] = result;
-    buf[4] = 0;
-    for (i = 0; i < 4; i++)
-    {
-        buf[4] += buf[i];
-    }*/
     protocalMakePackage(pProtocal, CMD_TYPE_ACK, pProtocal->cmd, &result, 1);
+/*
     if (NULL != pProtocal->pfnSendData)
     {
         pProtocal->pfnSendData(pProtocal->package,
             pProtocal->packageSize);
-    }
+*/
+    protocalRouterPackage(pProtocal,
+            pProtocal->package, pProtocal->packageSize);
 }
 
 /*!
@@ -87,8 +128,13 @@ void protocalAck(ProtocalStatusType *pProtocal, uint8_t result)
  * @return @ERROR_TYPE
  */
 int protocalSendCmd(ProtocalStatusType *pProtocal, uint8_t cmdType,
-    uint8_t cmd, void *pData, uint8_t lengthOfData)
+    uint8_t cmd, const void *pData, uint8_t lengthOfData)
 {
+    if (pProtocal->waitingStat)
+    {
+        return ERROR_BUSY_STAT;
+    }
+
     protocalMakePackage(pProtocal, cmdType, cmd, pData, lengthOfData);
     if (pProtocal->pfnSendData)
     {
@@ -96,6 +142,21 @@ int protocalSendCmd(ProtocalStatusType *pProtocal, uint8_t cmdType,
     }
 
     return EV_SUCCESS;
+}
+
+/*!
+ * Send again last package
+ *
+ * @param[i] pProtocal an instance of ProtocalStatusType
+ *
+ * @return none
+ */
+void protocalResendLastPackage(ProtocalStatusType *pProtocal)
+{
+    if (pProtocal->pfnSendData)
+    {
+        pProtocal->pfnSendData(pProtocal->package, pProtocal->packageSize);
+    }
 }
 
 /*!
@@ -110,6 +171,7 @@ int protocalSendCmd(ProtocalStatusType *pProtocal, uint8_t cmdType,
 int32_t protocalSendCmdWait(ProtocalStatusType *pProtocal, uint8_t cmdType,
     uint8_t cmd, void *pData, uint8_t lengthOfData)
 {
+    int count = 0;
     protocalMakePackage(pProtocal, cmdType, cmd, pData, lengthOfData);
     if (pProtocal->pfnSendData)
     {
@@ -126,69 +188,15 @@ int32_t protocalSendCmdWait(ProtocalStatusType *pProtocal, uint8_t cmdType,
     {
         if (pProtocal->pfnWait != NULL)
             pProtocal->pfnWait();
-    }
-
-    return (int)pProtocal->buffer[1];
-}
-
-/*
- * Send a command to slave & get the status or data
- *
- * @param[in] cmd command id to be queried
- *
- * @return none
- *
- */
-void protocalQuery(ProtocalStatusType *pProtocal, uint8_t cmd)
-{
-    protocalSendCmd(pProtocal, CMD_TYPE_QUERY, cmd, NULL, 0);
-}
-
-/*!
- * send a query command to remote target and wait until reply
- *
- * @param[in] pProtocal  instance of @ProtocalStatusType
- */
-int protocalQueryWait(ProtocalStatusType *pProtocal, uint8_t cmd,
-    void *pData, uint8_t len)
-{
-
-    uint8_t copyLen;
-    int ret;
-
-    while(pProtocal->waitingStat != PROTOCAL_WAITING_NONE)
-    {
-        if (pProtocal->pfnWait)
+        if (count++ > PROTOCAL_WAIT_TIMES)
         {
-            pProtocal->pfnWait();
+            pProtocal->waitingStat &= (~PROTOCAL_WAITING_ACK);
+            protocalReset(pProtocal);
+            return ERROR_TIME_OUT;
         }
     }
+    return (int32_t)pProtocal->replyErr;
 
-
-    /* set waiting stat */
-    pProtocal->waitingCmd = cmd;
-    pProtocal->waitingStat |= PROTOCAL_WAITING_QUERY;
-
-    /* send query command */
-    ret = protocalSendCmdWait(pProtocal, CMD_TYPE_QUERY, cmd, NULL, 0);
-    if (ret != EV_SUCCESS)
-    {
-        return ret;
-    }
-
-    /* start waiting */
-    while(pProtocal->waitingStat & PROTOCAL_WAITING_QUERY)
-    {
-        if (pProtocal->pfnWait)
-        {
-            pProtocal->pfnWait();
-        }
-    }
-
-    copyLen = len < pProtocal->replyLen ? len : pProtocal->replyLen;
-    memcpy(pData, pProtocal->buffer, copyLen);
-
-    return EV_SUCCESS;
 }
 
 /*!
@@ -231,6 +239,21 @@ void protocalSetWaitFunc(ProtocalStatusType *pProtocal,
 }
 
 /*!
+ * Set a callback function to schedule the event handler, while protocal receive
+ * an event, it must be processed in an individual task or thread
+ *
+ * @param[in] pProtocal      instance of @ProtocalStatusType
+ * @param[in] scheduleFunc   schedule callback function
+ *
+ * @return none
+ */
+void protocalSetScheduleFunc(ProtocalStatusType *pProtocal,
+    pfnScheduleDispatch scheduleFunc)
+{
+    pProtocal->pfnSchedule = scheduleFunc;
+}
+
+/*!
  * Set a callback function for sending data
  *
  * @param[in] pfnOnCmd
@@ -240,46 +263,6 @@ void protocalSetWaitFunc(ProtocalStatusType *pProtocal,
 void protocalSetSendDataFunc(ProtocalStatusType *pProtocal, pfnSendData pfnSend)
 {
     pProtocal->pfnSendData = pfnSend;
-}
-
-/*
- * @brief Do the protocal level command handler
- *
- * @param[i] pProtocal  instance of ProtocalStatusType
- * @param[i] cmdType    command type
- * @param[i] cmd        command id
- * @param[i] pData      data to be handled
- * @param[i] len        length of pData context
- *
- * @return
- *  0 : continue process
- *  1 : this is an internal command, no needer further process
- */
-uint32_t protocalPreprocessCmd(ProtocalStatusType *pProtocal,
-    uint8_t cmdType, uint8_t cmd, uint8_t *pData, uint8_t len)
-{
-    uint32_t ret = 0;
-
-    if (cmdType == CMD_TYPE_ACK)
-    {
-        return ret;
-    }
-
-    switch(cmd)
-    {
-        case CMD_ID_RESET_TARGET:
-            protocalReset(pProtocal);
-            break;
-
-        case CMD_ID_DEVICE_CONNECTION:
-            pProtocal->connectionStatus = *pData;            ret = 1;
-            break;
-
-        default:
-            break;
-    }
-
-    return ret;
 }
 
 /*!
@@ -312,11 +295,79 @@ static int32_t protocalAllocEmptyEventMemory(
         return ERROR_NO_RESOURCE;
     }
 
-    pstack[i].cmdType |= 0x80;
+//    pstack[i].cmdType |= 0x80;
     *ppEvent = &pstack[i];
     return EV_SUCCESS;
 }
 
+/*
+ * This function check whether header is received, if header patent is matching
+ * it will reset the protocal status and start to receiving new frame data
+ *
+ * @param[i] pProtocal  an instance of @ProtocalStatusType
+ * @param[i] ch         new character
+ *
+ * @return true or false
+ */
+int32_t protocalCheckHeader(ProtocalStatusType *pProtocal, uint8_t ch)
+{
+    uint8_t *pHeader = pProtocal->header;
+
+    /* move and insert new data */
+    pHeader[0] = pHeader[1];
+    pHeader[1] = pHeader[2];
+    pHeader[2] = pHeader[3];
+    pHeader[3] = ch;
+
+    if (memcmp(pHeader, headerMagic, 4) == 0)
+    {
+//        Trace("  <-header");
+        /* Header hit, reset receiving status, restart receiving new frame */
+        pProtocal->protocalStatus = PROTOCAL_STATUS_CMD_TYPE;
+        pProtocal->bufferIndex = 0;
+        pProtocal->checkSum = 0;
+        pProtocal->cmd = CMD_ID_INVALID;
+
+        /* return true to stop process this character, to prevent additional
+        status change */
+        return 1;
+    }
+
+    /* no header deteced, continue further processing */
+    return 0;
+}
+
+
+static int32_t protocalPushEvent(ProtocalStatusType *pProtocal)
+{
+    int32_t ret;
+    EventStackType *pEvent;
+    int copyLen;
+
+    ret = protocalAllocEmptyEventMemory(pProtocal, &pEvent);
+    if (ret)
+    {
+//        Trace("error, no memory!");
+        return ret;
+    }
+
+    if (NULL == &pProtocal->eventStack)
+    {
+        while (1);
+    }
+    pEvent->cmd = pProtocal->cmd;
+    pEvent->cmdType = pProtocal->cmdType;
+    pEvent->buffSize = pProtocal->bufferIndex;
+    copyLen = pProtocal->bufferIndex < PROTOCAL_MAX_DATA_LENGTH ?
+              pProtocal->bufferIndex : PROTOCAL_MAX_DATA_LENGTH;
+    memcpy(pEvent->buff, pProtocal->buffer, copyLen);
+    ret = listAdd(&pProtocal->eventStack, (uint32_t)pEvent);
+    if (pProtocal->pfnSchedule)
+    {
+        pProtocal->pfnSchedule();
+    }
+
+}
 /*!
  * Response for receiving character, and input to protocal analysis
  *
@@ -329,11 +380,21 @@ int32_t protocalUartReceiveChar(ProtocalStatusType *pProtocal, uint8_t ch)
     int32_t ret = EV_SUCCESS;
     EventStackType *pEvent;
     int copyLen;
-    uint32_t stop;
 
-    Trace("status:%d, data:%d", pProtocal->protocalStatus, ch);
+//    TracePrint("%d ", ch);
+    ret = protocalCheckHeader(pProtocal, ch);
+    /* if header has been detected, switch status to cmdtype and return */
+    if (ret)
+    {
+        return EV_SUCCESS;
+    }
     switch(pProtocal->protocalStatus)
     {
+        /* while checking header is always a default behavior,
+            just keep a status*/
+        case PROTOCAL_STATUS_HEADER:
+            break;
+
         case PROTOCAL_STATUS_CMD_TYPE:
             pProtocal->cmdType = ch;
             /* set command type and update status */
@@ -371,7 +432,7 @@ int32_t protocalUartReceiveChar(ProtocalStatusType *pProtocal, uint8_t ch)
             break;
 
           case PROTOCAL_STATUS_CHECKSUM:
-            Trace("========");
+//            Trace("");
             pProtocal->protocalStatus = PROTOCAL_STATUS_CMD_TYPE;
 
             /* Get checksum*/
@@ -388,19 +449,13 @@ int32_t protocalUartReceiveChar(ProtocalStatusType *pProtocal, uint8_t ch)
                 protocalAck(pProtocal, (uint8_t)ret);
             }
 
-            stop = protocalPreprocessCmd(pProtocal, pProtocal->cmdType,
-                pProtocal->cmd, pProtocal->buffer, pProtocal->bufferIndex);
-            if (stop)
-            {
-                Trace("return after preprocess:%d", stop);
-                return ret;
-            }
             /* if customer is waiting the answer, return immediately */
-            if ((pProtocal->waitingStat & PROTOCAL_WAITING_ACK) &&
+            if ((pProtocal->waitingStat  & PROTOCAL_WAITING_ACK) &&
                 (pProtocal->cmdType == CMD_TYPE_ACK))
             {
                 Trace("break on waiting ack");
                 pProtocal->waitingStat &= (~PROTOCAL_WAITING_ACK);
+                pProtocal->replyErr = pProtocal->buffer[0];
                 protocalReset(pProtocal);
                 break;
             }
@@ -415,7 +470,7 @@ int32_t protocalUartReceiveChar(ProtocalStatusType *pProtocal, uint8_t ch)
             }
             else if (pProtocal->waitingStat)
             {
-                Trace("waitiing state! %x, on:%d", pProtocal->waitingStat,
+                Trace("waiting state! %x, on:%d", pProtocal->waitingStat,
                     pProtocal->cmd);
 //                break;
             }
@@ -424,13 +479,7 @@ int32_t protocalUartReceiveChar(ProtocalStatusType *pProtocal, uint8_t ch)
             {
                 return ret;
             }
-            pEvent->cmd = pProtocal->cmd;
-            pEvent->cmdType |= pProtocal->cmdType;
-            pEvent->buffSize = pProtocal->bufferIndex;
-            copyLen = pProtocal->bufferIndex < PROTOCAL_MAX_DATA_LENGTH ?
-                      pProtocal->bufferIndex : PROTOCAL_MAX_DATA_LENGTH;
-            memcpy(pEvent->buff, pProtocal->buffer, copyLen);
-            ret = listAdd(&pProtocal->eventStack, (uint32_t)pEvent);
+            protocalPushEvent(pProtocal);
             protocalReset(pProtocal);
             break;
 
@@ -452,10 +501,11 @@ int32_t protocalUartReceiveChar(ProtocalStatusType *pProtocal, uint8_t ch)
 */
 int32_t protocalDispatchEvents(ProtocalStatusType *pProtocal)
 {
-    int32_t count;
+    uint32_t count;
     int32_t ret;
     EventStackType *pEvent;
     uint8_t cmdType;
+    int32_t stop;
 
     (void)listCount(&pProtocal->eventStack, &count);
     if (count == 0)
@@ -471,13 +521,20 @@ int32_t protocalDispatchEvents(ProtocalStatusType *pProtocal)
     listRemoveData(&pProtocal->eventStack, (uint32_t)pEvent);
 
     /* Get command type and reset cmdType to release memory */
-    cmdType = pEvent->cmdType & 0x7f;
+    cmdType = pEvent->cmdType;
     pEvent->cmdType = 0;
+
+    if (pEvent->cmd >= CMD_ID_INTERNAL_START)
+    {
+        protocalPreprocessCmd(pProtocal, cmdType,
+            pEvent->cmd, pEvent->buff, pEvent->buffSize);
+        return 0;
+    }
 
     switch(cmdType)
     {
         case CMD_TYPE_ACK:
-            if (pProtocal->pfnAck)
+            if ((pProtocal->connectionStatus) && (pProtocal->pfnAck))
             {
                 pProtocal->pfnAck(pEvent->cmd, pEvent->buff[0]);
             }
@@ -485,11 +542,15 @@ int32_t protocalDispatchEvents(ProtocalStatusType *pProtocal)
 
         case CMD_TYPE_SET:
         case CMD_TYPE_QUERY:
-            if (0 != pProtocal->pfnOnCmd)
+            if ((pProtocal->connectionStatus) && (0 != pProtocal->pfnOnCmd))
             {
                 ret = pProtocal->pfnOnCmd(cmdType, pEvent->cmd,
                     pEvent->buff, pEvent->buffSize);
             }
+            break;
+
+        case CMD_TYPE_ROUTER:
+            pProtocal->pfnSendData(pEvent->buff, pEvent->buffSize);
             break;
 
         default:
@@ -508,43 +569,9 @@ int32_t protocalDispatchEvents(ProtocalStatusType *pProtocal)
  */
 void protocalReset(ProtocalStatusType *pProtocal)
 {
-    pProtocal->protocalStatus = PROTOCAL_STATUS_CMD_TYPE;
+    pProtocal->protocalStatus = PROTOCAL_STATUS_HEADER;
     pProtocal->bufferIndex = 0;
     pProtocal->checkSum = 0;
     pProtocal->cmd = CMD_ID_INVALID;
 }
 
-/*
- * This function returns the device connection status
- * On the startup, if bluetooth connection has been established, a handshake
- * between BT and mobile phone will be executed, if success, the connection
- * is established
- *
- * @param none
- *
- * @return
- * 0: disconnected
- * 1: connected
- */
-uint8_t protocalIsConnected(ProtocalStatusType *pProtocal)
-{
-    return pProtocal->connectionStatus;
-}
-
-
-/*
- * This function make a handshake with remote target for establishing
- * physical connection
- *
- * @param[i] pProtocal     an instance of @ProtocalStatusType
- * @param[i] blConnected   connected status
- *
- * @return ERROR_TYPE
- */
-int32_t protocalSetDeviceConnected(ProtocalStatusType *pProtocal,
-    uint8_t blConnected)
-{
-
-    return protocalSendCmdWait(pProtocal, CMD_TYPE_SET, CMD_ID_DEVICE_CONNECTION,
-        (void*)&blConnected, sizeof(blConnected));
-}

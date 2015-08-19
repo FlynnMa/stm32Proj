@@ -254,16 +254,16 @@ static char *_strtok(char *str, const char *delim, char **saveptr) {
 void Shell::process(void const *argument)
 {
     char ch;
-    char line[SHELL_MAX_LINE_LEN];
+    static char line[SHELL_MAX_LINE_LEN];
     bool ret;
     char *cmd, *argPos, *tok;
     int i;
-    char *args[SHELL_MAX_ARGUMENTS + 1];
+    static char *args[SHELL_MAX_ARGUMENTS + 1];
     const Command *exec;
     int result;
 
     TraceLine();
-    Trace("welcome!");
+    Trace("welcome to gBike");
     TraceLine();
 
     m_pthread = (Thread*)argument;

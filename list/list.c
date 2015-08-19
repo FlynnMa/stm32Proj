@@ -1,5 +1,6 @@
 #include "list.h"
 #include "protocalTypes.h"
+#include "trace.h"
 
 /*
  * @brief find an empty link in list pool
@@ -47,6 +48,7 @@ int listAdd(list_t *pList, uint32_t data)
     if(NULL == plink) {
         return ERROR_NO_RESOURCE;
     }
+    Trace("add:%d->%d", data, pList->count);
 
     plink->next = NULL;
     plink->data = data;
@@ -83,6 +85,7 @@ int listRemoveData(list_t *pList, uint32_t data)
    if (NULL == pList) {
         return -1;
    }
+   Trace("\tremove:%d", data);
 
     plink = pList->head;
     while(plink){
@@ -133,7 +136,7 @@ int listRemoveAll(list_t *pList)
     while (plink) {
         plinkTmp = plink;
         plink = plink->next;
-        plink->isUsed = 0;
+        plinkTmp->isUsed = 0;
     }
 
     pList->head = NULL;

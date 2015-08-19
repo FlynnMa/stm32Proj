@@ -2,6 +2,14 @@
 #define protocalCustomWin32_h
 #include <stdint.h>
 
+#define SOFTWARE_VERSION_MAJOR                       0
+
+#define SOFTWARE_VERSION_SUB                         1
+
+#define SOFTWARE_VERSION_MODIFY                      0
+
+#define SOFTWARE_VERSION_YEAR                        15
+
 /*! default protocal schedual duration */
 #define PROTOCAL_CUSTOM_SCHEDULE_DURATION_DEFAULT    100
 
@@ -26,12 +34,15 @@ typedef struct electronicVehicleCustomData{
     float mileage;
     float maxSpeed;
     float temperature;
+    float current;
 
     uint32_t scheduleDuration;  /**< schedule duration for the protocal in milli-seconds, default 100ms */
     uint32_t batteryInterval;
     uint8_t  isCharging;
 
     uint32_t mile;
+
+    int      isPowerOn;  /* is device power on or off */
 } electronicVehicleCustomDataType;
 
 #ifdef __cplusplus
@@ -67,18 +78,17 @@ int32_t electronicVehicleCustomStopSchedule(void);
 int32_t protocalCustomUartSendData(uint8_t* pBuf, uint32_t len);
 
 /*!
- * Get firmware version
+ * Get firmware version, this is used on the mobile app start up, it may require
+ * the firmware version for checking software compatibility and detect new
+ * firmware availability
  *
- * @param[out] ppBuf  address to be set of firmware version,
- *                        which is ASCII string formate, be sure that the
- *                        address of *ppBuf is a const char type which
- *                        will not be released
- * @param[out] pLen   length of ppBuf contents
+ * @param[out] pVer  address to be set of firmware version,
+ *                        4bytes version in binary formate
  *
  * @return @ERROR_TYPE
  */
 int32_t electronicVehicleCustomGetFirmwareVersion(
-                                        const char **ppBuf, uint8_t *pLen);
+        uint32_t *pVer);
 
 /*!
  * Get mainboard temperature
@@ -99,6 +109,15 @@ int32_t electronicVehicleCustomGetTemperature(float *pTemperature);
 int32_t electronicVehicleCustomGetBatteryVoltage(float *pBattery);
 
 /*!
+ * Get electronic current
+ *
+ * @param pCurrent[out]    battery realtime current
+ *
+ * @return @ERROR_TYPE
+ */
+int32_t elecronicVehicleCustomGetCurrent(float *pCurrent);
+
+/*!
  * Get battery range
  *
  * @param pBatteryOut[out]    battery voltage which indicates used out
@@ -107,7 +126,7 @@ int32_t electronicVehicleCustomGetBatteryVoltage(float *pBattery);
  *
  * @return @ERROR_TYPE
  */
-int32_t electronicVehicleCustomGetBatteryRange(
+int32_t electronicVeichleCustomGetBatteryRange(
                 float *pBatteryOut,
                 float *pBatteryFull,
                 float *pBatteryLow);
@@ -152,6 +171,13 @@ int32_t electronicVehicleCustomUartSendData(uint8_t* pBuf,
  */
 void electronicVehicleCustomSetMile(uint32_t mile);
 
+/*!
+ * Get total mile, this function is invoked on the request of mile data by
+ * mobile phone
+ *
+ * @param[i] pMile  total mile counted by embeded end
+ */
+void electronicVehicleCustomGetMile(uint32_t *pMile);
 
 #ifdef __cplusplus
 }

@@ -73,7 +73,7 @@ unsigned char shellStack[1024];
 
 unsigned char evUartStack[1024];
 
-unsigned char evTimerStack[1024];
+unsigned char evTimerStack[2048];
 
 extern void sensorsAccEnable(int en);
 int main()
@@ -95,13 +95,13 @@ void electronicVehicleSendData(uint8_t* pBuf, uint32_t len)
 {
     int i = 0;
 
-    TracePrint("sending:");
+//    TracePrint("sending:");
     for (i = 0; i < len; i++)
     {
-        TracePrint("%d ,", pBuf[i]);
+//        TracePrint("%d ,", pBuf[i]);
         evThread.pBtUart->putc((int)pBuf[i]);
     }
-    Trace("  end of sending...");
+//    Trace("  end of sending...");
 }
 }
 

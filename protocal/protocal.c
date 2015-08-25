@@ -105,7 +105,12 @@ void protocalPackageAddCmd()
  */
 void protocalAck(ProtocalStatusType *pProtocal, uint8_t result)
 {
-    EventStackType *pEvent;
+//    EventStackType *pEvent;
+
+
+    /* no need ack, as the data transferred successfully*/
+    if (result == 0)
+        return;
 
     protocalMakePackage(pProtocal, CMD_TYPE_ACK, pProtocal->cmd, &result, 1);
 /*
